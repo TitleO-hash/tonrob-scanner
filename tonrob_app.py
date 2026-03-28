@@ -1,5 +1,5 @@
 """
-หุ้นต้นรอบ Scanner — Streamlit App v2
+หุ้นต้นรอบ Scanner — Streamlit App v3
 ========================================
 Logic:
   1. ขาลงยาวนาน: หา 52w Low → ย้อนหลัง 252 bars → อยู่ใต้ EMA200 (ยอมแฉลบ ±2%)
@@ -18,6 +18,12 @@ st.set_page_config(page_title="หุ้นต้นรอบ Scanner", page_ico
 
 st.title("🚀 หุ้นต้นรอบ Scanner")
 st.caption(f"อัพเดทล่าสุด: {datetime.now().strftime('%d %b %Y %H:%M')}")
+
+# ── Session State ─────────────────────────────────────
+if "scan_results" not in st.session_state:
+    st.session_state.scan_results = []
+if "scan_done" not in st.session_state:
+    st.session_state.scan_done = False
 
 # ══════════════════════════════════════════════════════
 #  SIDEBAR
@@ -95,7 +101,7 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         close_now = float(df["Close"].iloc[-1])
         ema_now   = float(df["EMA200"].iloc[-1])
 
-        # ── เงื่อนไขที่ 1 ──────────────────────────────
+        # เงื่อนไขที่ 1
         window_52w    = df.iloc[-252:]
         low_52w_idx   = window_52w["Close"].idxmin()
         low_52w_price = float(df.loc[low_52w_idx, "Close"])
@@ -112,20 +118,19 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         if not all_below:
             return None
 
-        # ── เงื่อนไขที่ 2 ──────────────────────────────
+        # เงื่อนไขที่ 2
         pct_above_low = (close_now - low_52w_price) / low_52w_price * 100
         if pct_above_low < min_low:
             return None
 
-        # ── เงื่อนไขที่ 3 ──────────────────────────────
-        # หาแท่งแรกที่ Break EMA200 ย้อนจากปัจจุบัน
+        # เงื่อนไขที่ 3
         break_idx = None
         for i in range(len(df) - 1, pos_of_low, -1):
             if float(df["Close"].iloc[i]) > float(df["EMA200"].iloc[i]):
                 break_idx = i
             else:
                 if break_idx is not None:
-                    break  # เจอแท่งแรกที่ Break แล้ว
+                    break
 
         if break_idx is None:
             return None
@@ -136,10 +141,15 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         if close_now > max_price:
             return None
 
-        # ── ข้อมูลเพิ่มเติม ──────────────────────────
         pct_vs_ema      = (close_now - ema_now) / ema_now * 100
         pct_from_break  = (close_now - break_price) / break_price * 100
         bars_since_break = len(df) - 1 - break_idx
+
+        # TradingView URL
+        if symbol.endswith(".BK"):
+            tv_url = f"https://www.tradingview.com/chart/?symbol=SET:{symbol[:-3]}"
+        else:
+            tv_url = f"https://www.tradingview.com/chart/?symbol={symbol}"
 
         return {
             "Symbol"           : symbol,
@@ -151,7 +161,7 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
             "Bars since Break" : bars_since_break,
             "52w Low"          : round(low_52w_price, 2),
             "vs 52wLow (%)"    : round(pct_above_low, 1),
-            "TradingView"      : f"https://www.tradingview.com/chart/?symbol=SET:{symbol[:-3]}" if symbol.endswith(".BK") else f"https://www.tradingview.com/chart/?symbol={symbol}",
+            "TradingView"      : tv_url,
         }
 
     except Exception:
@@ -164,6 +174,7 @@ if not uploaded_file:
     st.info("👈 เริ่มต้นด้วยการอัพโหลดไฟล์ CSV รายชื่อหุ้นที่ Sidebar ครับ")
 
 elif scan_btn and symbols:
+    # Scan ใหม่ → เก็บผลใน session_state
     st.divider()
     progress_bar = st.progress(0, text="กำลังเริ่ม scan...")
     status_text  = st.empty()
@@ -183,44 +194,53 @@ elif scan_btn and symbols:
     progress_bar.progress(1.0, text="✅ Scan เสร็จแล้ว!")
     status_text.empty()
 
-    st.subheader(f"📊 ผลลัพธ์: พบ {len(results)} หุ้น จาก {len(symbols)} ตัว")
+    # บันทึกผลลัพธ์ไว้ใน session_state
+    st.session_state.scan_results = results
+    st.session_state.scan_done    = True
 
-    if results:
-        # เรียงตาม Bars since Break น้อยสุด = Early ที่สุด
-        df_result = pd.DataFrame(results).sort_values("Bars since Break")
+# ── แสดงผล (ดึงจาก session_state) ───────────────────
+if st.session_state.scan_done and st.session_state.scan_results:
+    results = st.session_state.scan_results
+    st.divider()
+    st.subheader(f"📊 ผลลัพธ์: พบ {len(results)} หุ้น")
 
-        # ── Filter: เหนือ / ใต้ EMA200 ──────────────────
-        st.markdown("**🔽 กรองผลลัพธ์**")
-        filter_pos = st.radio(
-            "แสดงเฉพาะหุ้นที่ตอนนี้อยู่",
-            options=["ทั้งหมด", "เหนือ EMA200", "ใต้ EMA200"],
-            horizontal=True
-        )
-        if filter_pos == "เหนือ EMA200":
-            df_result = df_result[df_result["vs EMA200 (%)"] >= 0]
-        elif filter_pos == "ใต้ EMA200":
-            df_result = df_result[df_result["vs EMA200 (%)"] < 0]
+    # Filter radio — ไม่ทำให้ scan ใหม่
+    filter_pos = st.radio(
+        "🔽 แสดงเฉพาะหุ้นที่ตอนนี้อยู่",
+        options=["ทั้งหมด", "เหนือ EMA200", "ใต้ EMA200"],
+        horizontal=True
+    )
 
-        for _, row in df_result.iterrows():
-            col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 2, 2, 1])
-            col1.metric("Symbol", row["Symbol"])
-            col2.metric("Close", f"${row['Close']}", f"{row['vs EMA200 (%)']:+.1f}% vs EMA")
-            col3.metric("Break Price", f"${row['Break Price']}", f"{row['vs Break (%)']:+.1f}% จาก Break")
-            col4.metric("Bars since Break", f"{row['Bars since Break']} bars")
-            col5.metric("vs 52w Low", f"{row['vs 52wLow (%)']:+.1f}%")
-            col6.link_button("📈", row["TradingView"])
-            st.divider()
+    df_result = pd.DataFrame(results).sort_values("Bars since Break")
 
-        csv = df_result.drop(columns=["TradingView"]).to_csv(index=False, encoding="utf-8-sig")
-        st.download_button(
-            label="💾 ดาวน์โหลดผลลัพธ์ CSV",
-            data=csv,
-            file_name=f"tonrob_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    else:
-        st.warning("ไม่พบหุ้นที่ผ่านเงื่อนไข ลองปรับ parameters ใน Sidebar ครับ")
+    if filter_pos == "เหนือ EMA200":
+        df_result = df_result[df_result["vs EMA200 (%)"] >= 0]
+    elif filter_pos == "ใต้ EMA200":
+        df_result = df_result[df_result["vs EMA200 (%)"] < 0]
+
+    st.caption(f"แสดง {len(df_result)} ตัว")
+
+    for _, row in df_result.iterrows():
+        col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 2, 2, 1])
+        col1.metric("Symbol", row["Symbol"].replace(".BK", "") if row["Symbol"].endswith(".BK") else row["Symbol"])
+        col2.metric("Close", f"{row['Close']}", f"{row['vs EMA200 (%)']:+.1f}% vs EMA")
+        col3.metric("Break Price", f"{row['Break Price']}", f"{row['vs Break (%)']:+.1f}% จาก Break")
+        col4.metric("Bars since Break", f"{row['Bars since Break']} bars")
+        col5.metric("vs 52w Low", f"{row['vs 52wLow (%)']:+.1f}%")
+        col6.link_button("📈", row["TradingView"])
+        st.divider()
+
+    csv = df_result.drop(columns=["TradingView"]).to_csv(index=False, encoding="utf-8-sig")
+    st.download_button(
+        label="💾 ดาวน์โหลดผลลัพธ์ CSV",
+        data=csv,
+        file_name=f"tonrob_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+elif st.session_state.scan_done and not st.session_state.scan_results:
+    st.warning("ไม่พบหุ้นที่ผ่านเงื่อนไข ลองปรับ parameters ใน Sidebar ครับ")
 
 elif scan_btn and not symbols:
     st.error("กรุณาอัพโหลดไฟล์ CSV ก่อนครับ")
