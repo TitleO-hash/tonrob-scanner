@@ -151,7 +151,7 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
             "Bars since Break" : bars_since_break,
             "52w Low"          : round(low_52w_price, 2),
             "vs 52wLow (%)"    : round(pct_above_low, 1),
-            "TradingView"      : f"https://www.tradingview.com/chart/?symbol={symbol}",
+            "TradingView"      : f"https://www.tradingview.com/chart/?symbol=SET:{symbol[:-3]}" if symbol.endswith(".BK") else f"https://www.tradingview.com/chart/?symbol={symbol}",
         }
 
     except Exception:
@@ -188,6 +188,18 @@ elif scan_btn and symbols:
     if results:
         # เรียงตาม Bars since Break น้อยสุด = Early ที่สุด
         df_result = pd.DataFrame(results).sort_values("Bars since Break")
+
+        # ── Filter: เหนือ / ใต้ EMA200 ──────────────────
+        st.markdown("**🔽 กรองผลลัพธ์**")
+        filter_pos = st.radio(
+            "แสดงเฉพาะหุ้นที่ตอนนี้อยู่",
+            options=["ทั้งหมด", "เหนือ EMA200", "ใต้ EMA200"],
+            horizontal=True
+        )
+        if filter_pos == "เหนือ EMA200":
+            df_result = df_result[df_result["vs EMA200 (%)"] >= 0]
+        elif filter_pos == "ใต้ EMA200":
+            df_result = df_result[df_result["vs EMA200 (%)"] < 0]
 
         for _, row in df_result.iterrows():
             col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 2, 2, 1])
