@@ -202,7 +202,14 @@ elif scan_btn and symbols:
 if st.session_state.scan_done and st.session_state.scan_results:
     results = st.session_state.scan_results
     st.divider()
+    df_all = pd.DataFrame(results)
+    above = int((df_all["vs EMA200 (%)"] >= 0).sum())
+    below = int((df_all["vs EMA200 (%)"] < 0).sum())
+
     st.subheader(f"📊 ผลลัพธ์: พบ {len(results)} หุ้น")
+    col_a, col_b = st.columns(2)
+    col_a.metric("📈 เหนือ EMA200", f"{above} ตัว")
+    col_b.metric("📉 ใต้ EMA200", f"{below} ตัว")
 
     # Filter radio — ไม่ทำให้ scan ใหม่
     filter_pos = st.radio(
