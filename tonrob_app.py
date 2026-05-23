@@ -17,7 +17,7 @@ from datetime import datetime
 st.set_page_config(page_title="หุ้นต้นรอบ Scanner", page_icon="🚀", layout="wide")
 
 st.title("🚀 หุ้นต้นรอบ Scanner")
-st.caption(f"อัพเดทล่าสุด: {datetime.now().strftime('%d %b %Y %H:%M')}")
+st.caption("กด Scan เพื่อหาหุ้นที่มีโอกาสเป็นหุ้นต้นรอบ")
 
 # ── Session State ─────────────────────────────────────
 if "scan_results" not in st.session_state:
@@ -44,8 +44,8 @@ with st.sidebar:
     st.markdown("**เงื่อนไขที่ 1 — ขาลงยาวนาน**")
     downtrend_bars = st.number_input(
         "นับย้อนหลังจาก 52w Low กี่ bars",
-        min_value=100, max_value=500, value=252, step=10,
-        help="252 bars = ~1 ปี"
+        min_value=100, max_value=500, value=63, step=10,
+        help="63 bars = ~3 เดือน"
     )
     buffer_pct = st.slider(
         "ยอมให้แฉลบเหนือ EMA200 ได้ (%)",
@@ -55,13 +55,13 @@ with st.sidebar:
     st.markdown("**เงื่อนไขที่ 2 — ไม่สร้าง New Low**")
     min_above_low = st.slider(
         "Close > 52w Low อย่างน้อย (%)",
-        min_value=1.0, max_value=50.0, value=10.0, step=1.0
+        min_value=1.0, max_value=50.0, value=1.0, step=1.0
     )
 
     st.markdown("**เงื่อนไขที่ 3 — Break EMA200 แล้วยังไม่วิ่งไกล**")
     max_run_pct = st.slider(
         "วิ่งจาก Break Price ได้ไม่เกิน (%)",
-        min_value=5.0, max_value=100.0, value=25.0, step=5.0,
+        min_value=5.0, max_value=100.0, value=5.0, step=5.0,
         help="ยิ่งน้อย = จับได้ Early มาก"
     )
 
