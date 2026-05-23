@@ -2,10 +2,10 @@
 หุ้นต้นรอบ Scanner — Streamlit App v3
 ========================================
 Logic:
-  1. ขาลงยาวนาน: หา 52w Low → ย้อนหลัง 252 bars → อยู่ใต้ EMA200 (ยอมแฉลบ ±2%)
-  2. ไม่สร้าง New Low: Close ปัจจุบัน > 52w Low อย่างน้อย 10%
+  1. ขาลงยาวนาน: หา 52w Low → ย้อนหลัง 63 bars → อยู่ใต้ EMA200 (ยอมแฉลบ ±2%)
+  2. ไม่สร้าง New Low: Close ปัจจุบัน > 52w Low อย่างน้อย 1%
   3. Break EMA200 แล้วยังไม่วิ่งไกล:
-     - หาแท่งแรกที่ Break EMA200 (ย้อนจากปัจจุบัน)
+     - หาแท่งแรกที่ Break EMA200 หลังจาก 52w Low
      - Close ปัจจุบัน <= Break Price × (1 + X%)
 """
 
@@ -123,14 +123,12 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         if pct_above_low < min_low:
             return None
 
-        # เงื่อนไขที่ 3
+        # เงื่อนไขที่ 3 — หาแท่งแรกที่ Break EMA200 หลัง 52w Low
         break_idx = None
-        for i in range(len(df) - 1, pos_of_low, -1):
+        for i in range(pos_of_low + 1, len(df)):
             if float(df["Close"].iloc[i]) > float(df["EMA200"].iloc[i]):
                 break_idx = i
-            else:
-                if break_idx is not None:
-                    break
+                break
 
         if break_idx is None:
             return None
