@@ -86,7 +86,7 @@ if uploaded_file:
 def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
     try:
         df = yf.download(symbol, period="3y", interval="1d",
-                         progress=False, auto_adjust=True)
+                         progress=False, auto_adjust=False, actions=False)
         if df is None or len(df) < 252 + dt_bars + ema_p:
             return None
         if isinstance(df.columns, pd.MultiIndex):
@@ -139,8 +139,8 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         if close_now > max_price:
             return None
 
-        pct_vs_ema      = (close_now - ema_now) / ema_now * 100
-        pct_from_break  = (close_now - break_price) / break_price * 100
+        pct_vs_ema       = (close_now - ema_now) / ema_now * 100
+        pct_from_break   = (close_now - break_price) / break_price * 100
         bars_since_break = len(df) - 1 - break_idx
 
         # TradingView URL
