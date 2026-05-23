@@ -44,7 +44,7 @@ with st.sidebar:
     st.markdown("**เงื่อนไขที่ 1 — ขาลงยาวนาน**")
     downtrend_bars = st.number_input(
         "นับย้อนหลังจาก 52w Low กี่ bars",
-        min_value=100, max_value=500, value=63, step=10,
+        min_value=10, max_value=500, value=63, step=10,
         help="63 bars = ~3 เดือน"
     )
     buffer_pct = st.slider(
@@ -174,7 +174,6 @@ if not uploaded_file:
     st.info("👈 เริ่มต้นด้วยการอัพโหลดไฟล์ CSV รายชื่อหุ้นที่ Sidebar ครับ")
 
 elif scan_btn and symbols:
-    # Scan ใหม่ → เก็บผลใน session_state
     st.divider()
     progress_bar = st.progress(0, text="กำลังเริ่ม scan...")
     status_text  = st.empty()
@@ -194,7 +193,6 @@ elif scan_btn and symbols:
     progress_bar.progress(1.0, text="✅ Scan เสร็จแล้ว!")
     status_text.empty()
 
-    # บันทึกผลลัพธ์ไว้ใน session_state
     st.session_state.scan_results = results
     st.session_state.scan_done    = True
 
@@ -211,7 +209,6 @@ if st.session_state.scan_done and st.session_state.scan_results:
     col_a.metric("📈 เหนือ EMA200", f"{above} ตัว")
     col_b.metric("📉 ใต้ EMA200", f"{below} ตัว")
 
-    # Filter radio — ไม่ทำให้ scan ใหม่
     filter_pos = st.radio(
         "🔽 แสดงเฉพาะหุ้นที่ตอนนี้อยู่",
         options=["ทั้งหมด", "เหนือ EMA200", "ใต้ EMA200"],
