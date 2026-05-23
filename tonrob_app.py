@@ -31,11 +31,58 @@ if "scan_done" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ ตั้งค่า")
 
-    st.subheader("📁 ไฟล์รายชื่อหุ้น")
-    uploaded_file = st.file_uploader(
-        "อัพโหลดไฟล์ CSV (ต้องมีคอลัมน์ Symbol)", type=["csv"]
+    # ── รายชื่อหุ้น ──────────────────────────────────
+    st.subheader("📁 รายชื่อหุ้น")
+    market_mode = st.radio(
+        "เลือก Market",
+        options=["อัพโหลด CSV", "S&P 500 (preset)", "SET100 (preset)", "พิมพ์เอง"],
     )
 
+    symbols = []
+
+    if market_mode == "อัพโหลด CSV":
+        uploaded_file = st.file_uploader(
+            "อัพโหลดไฟล์ CSV (ต้องมีคอลัมน์ Symbol)", type=["csv"]
+        )
+        if uploaded_file:
+            df_sym = pd.read_csv(uploaded_file)
+            if "Symbol" in df_sym.columns:
+                symbols = df_sym["Symbol"].dropna().astype(str).str.strip().tolist()
+                st.success(f"โหลดได้ {len(symbols)} หุ้น ✅")
+            else:
+                st.error("❌ ไม่พบคอลัมน์ 'Symbol'")
+
+    elif market_mode == "S&P 500 (preset)":
+        try:
+            df_sym = pd.read_csv("sp500_symbols.csv")
+            if "Symbol" in df_sym.columns:
+                symbols = df_sym["Symbol"].dropna().astype(str).str.strip().tolist()
+                st.success(f"โหลด S&P 500 ได้ {len(symbols)} หุ้น ✅")
+            else:
+                st.error("❌ ไม่พบคอลัมน์ 'Symbol' ใน sp500_symbols.csv")
+        except FileNotFoundError:
+            st.error("❌ ไม่พบไฟล์ sp500_symbols.csv")
+
+    elif market_mode == "SET100 (preset)":
+        try:
+            df_sym = pd.read_csv("set100_symbols.csv")
+            if "Symbol" in df_sym.columns:
+                symbols = df_sym["Symbol"].dropna().astype(str).str.strip().tolist()
+                st.success(f"โหลด SET100 ได้ {len(symbols)} หุ้น ✅")
+            else:
+                st.error("❌ ไม่พบคอลัมน์ 'Symbol' ใน set100_symbols.csv")
+        except FileNotFoundError:
+            st.error("❌ ไม่พบไฟล์ set100_symbols.csv")
+
+    elif market_mode == "พิมพ์เอง":
+        st.caption("พิมพ์ symbol คั่นด้วย comma หรือ newline")
+        manual_input = st.text_area("Symbol", placeholder="เช่น AOT.BK, PTT.BK\nหรือแต่ละบรรทัด")
+        if manual_input.strip():
+            raw = manual_input.replace(",", "\n")
+            symbols = [s.strip() for s in raw.splitlines() if s.strip()]
+            st.success(f"โหลดได้ {len(symbols)} หุ้น ✅")
+
+    # ── Parameters ───────────────────────────────────
     st.divider()
     st.subheader("🔧 Parameters")
 
@@ -69,23 +116,19 @@ with st.sidebar:
     scan_btn = st.button("🔍 เริ่ม Scan", type="primary", use_container_width=True)
 
 # ══════════════════════════════════════════════════════
-#  LOAD SYMBOLS
+#  HELPER
 # ══════════════════════════════════════════════════════
-symbols = []
-if uploaded_file:
-    df_sym = pd.read_csv(uploaded_file)
-    if "Symbol" in df_sym.columns:
-        symbols = df_sym["Symbol"].dropna().astype(str).str.strip().tolist()
-        st.sidebar.success(f"โหลดได้ {len(symbols)} หุ้น ✅")
-    else:
-        st.sidebar.error("❌ ไม่พบคอลัมน์ 'Symbol'")
+def to_tv_format(symbol):
+    if symbol.endswith(".BK"):
+        return f"SET:{symbol[:-3]}"
+    return symbol
 
 # ══════════════════════════════════════════════════════
 #  SCAN FUNCTION
 # ══════════════════════════════════════════════════════
 def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
     try:
-        df = yf.download(symbol, period="3y", interval="1d",
+        df = yf.download(symbol, period="5y", interval="1d",
                          progress=False, auto_adjust=False, actions=False)
         if df is None or len(df) < 252 + dt_bars + ema_p:
             return None
@@ -143,12 +186,6 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
         pct_from_break   = (close_now - break_price) / break_price * 100
         bars_since_break = len(df) - 1 - break_idx
 
-        # TradingView URL
-        if symbol.endswith(".BK"):
-            tv_url = f"https://www.tradingview.com/chart/?symbol=SET:{symbol[:-3]}"
-        else:
-            tv_url = f"https://www.tradingview.com/chart/?symbol={symbol}"
-
         return {
             "Symbol"           : symbol,
             "Close"            : round(close_now, 2),
@@ -159,7 +196,7 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
             "Bars since Break" : bars_since_break,
             "52w Low"          : round(low_52w_price, 2),
             "vs 52wLow (%)"    : round(pct_above_low, 1),
-            "TradingView"      : tv_url,
+            "TradingView"      : f"https://www.tradingview.com/chart/?symbol={to_tv_format(symbol)}",
         }
 
     except Exception:
@@ -168,8 +205,8 @@ def scan_symbol(symbol, ema_p, dt_bars, buf_pct, min_low, max_run):
 # ══════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════
-if not uploaded_file:
-    st.info("👈 เริ่มต้นด้วยการอัพโหลดไฟล์ CSV รายชื่อหุ้นที่ Sidebar ครับ")
+if not symbols and not scan_btn:
+    st.info("👈 เริ่มต้นด้วยการเลือกรายชื่อหุ้นที่ Sidebar ครับ")
 
 elif scan_btn and symbols:
     st.divider()
@@ -194,7 +231,10 @@ elif scan_btn and symbols:
     st.session_state.scan_results = results
     st.session_state.scan_done    = True
 
-# ── แสดงผล (ดึงจาก session_state) ───────────────────
+elif scan_btn and not symbols:
+    st.error("กรุณาเลือกรายชื่อหุ้นก่อนครับ")
+
+# ── แสดงผล ───────────────────────────────────────────
 if st.session_state.scan_done and st.session_state.scan_results:
     results = st.session_state.scan_results
     st.divider()
@@ -232,17 +272,30 @@ if st.session_state.scan_done and st.session_state.scan_results:
         col6.link_button("📈", row["TradingView"])
         st.divider()
 
-    csv = df_result.drop(columns=["TradingView"]).to_csv(index=False, encoding="utf-8-sig")
-    st.download_button(
-        label="💾 ดาวน์โหลดผลลัพธ์ CSV",
-        data=csv,
-        file_name=f"tonrob_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    # ── Download buttons ──────────────────────────────
+    col_dl1, col_dl2 = st.columns(2)
+
+    with col_dl1:
+        csv = df_result.drop(columns=["TradingView"]).to_csv(index=False, encoding="utf-8-sig")
+        st.download_button(
+            label="💾 ดาวน์โหลด CSV",
+            data=csv,
+            file_name=f"tonrob_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    with col_dl2:
+        tv_list = "\n".join([to_tv_format(row["Symbol"]) for _, row in df_result.iterrows()])
+        st.download_button(
+            label="📺 ดาวน์โหลด TradingView Watchlist",
+            data=tv_list,
+            file_name=f"tonrob_watchlist_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    
+    st.caption("💡 นำไฟล์ .txt ไป Import ใน TradingView → Watchlist → Import symbols")
 
 elif st.session_state.scan_done and not st.session_state.scan_results:
     st.warning("ไม่พบหุ้นที่ผ่านเงื่อนไข ลองปรับ parameters ใน Sidebar ครับ")
-
-elif scan_btn and not symbols:
-    st.error("กรุณาอัพโหลดไฟล์ CSV ก่อนครับ")
